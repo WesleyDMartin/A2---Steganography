@@ -10,105 +10,87 @@
 #pragma warning(disable: 4996)
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
+#include <windows.h>
+#include <fstream>
+#include <iterator>
+#include <algorithm>
+#include <iostream>
+#include <string>
 
+using namespace std;
+string getOutpuDirectory(char *inputfile);
 
-int is_jpg(unsigned char*);
-
-int main(int argc, char* argv[])
+int main(int argc, char** argv)
 {
-	FILE* outptr = nullptr;
-
-	//open card file
-	FILE* inptr = fopen("control.img", "r");
-	if (inptr == nullptr)
-	{
-		printf("File not found");
-		return 1;
-	}
+	std::string fileName;
+	std::ifstream input(argv[1], std::ios::binary);
+	std::ofstream out;
+	string directory = getOutpuDirectory(argv[1]);
 
 
-	// reserve space for 512 byte blocks
-	unsigned char* buffer = (unsigned char *)malloc(512 * sizeof(char));
-	if (buffer == nullptr)
-	{
-		printf("Out of memory");
-		return 2;
-	}
+	int i = 0;
+	if (input) {
+		// get length of file:
+		input.seekg(0, input.end);
+		int length = input.tellg();
+		input.seekg(0, input.beg);
 
-	//reserve space for title
-	char* title = (char *)malloc(8 * sizeof(char));
-	if (buffer == nullptr)
-	{
-		printf("Out of memory");
-		return 2;
-	}
-
-	int pic_number = 0;
-	int bytesRead = 0;
-	int totalBytesRead = 0;
-	//repeat until end of card   
-	//read 512 bytes from memory
-	while ((bytesRead = fread(buffer, 1, 512, inptr)))
-	{
-		totalBytesRead += bytesRead;
-		// start of first jpeg
-		if (is_jpg(buffer) == 1 && pic_number == 0)
+		unsigned char * buffer = new unsigned char[length];
+		int sof = 0;
+		int eof = 0;
+		int files = 0;
+		int depth = 0;
+		bool copy = false;
+		cout << "Reading " << length << " characters... " << endl;
+		// read data as a block:
+		input.read((char *)buffer, length);
+		
+		for (i = 0; i < length; i++)
 		{
-			//create new jpeg
-			sprintf(title, "%03d.jpg", pic_number);
-			outptr = fopen(title, "w");
-
-			pic_number++;
-			//go to next read
+			//printf("%d\n", buffer[i]);
+			if(buffer[i] == 0xFF && buffer[i+1] == 0xD8)
+			{
+				if(depth == 0)
+				{
+					fileName = directory + "/out" + to_string(files) + ".jpg";
+					cout << "Creating file " << fileName << endl;					   
+					out = ofstream(fileName, ios::binary);
+				}
+				copy = true;
+				sof++;
+				depth++;
+			}
+			if (buffer[i] == 0xFF && buffer[i + 1] == 0xD9)
+			{
+				eof++;
+				depth--;
+				if(depth == 0)
+				{
+					out << buffer[i];
+					out << buffer[i + 1];
+					copy = false;
+					files++;
+					cout << "closing file " << fileName << endl;
+					out.close();
+				}
+			}
+			if(copy)
+			{
+				out << buffer[i];
+			}
 		}
+		input.close();
 
-			// start of all other jpegs
-		else if (is_jpg(buffer) == 1 && pic_number > 0)
-		{
-			//close old jpeg
-			fclose(outptr);
-
-			//create new jpg
-			sprintf(title, "%03d.jpg", pic_number);
-			outptr = fopen(title, "w");
-
-			pic_number++;
-			//go to next read            
-		}
-
-		// if a jpeg is currently open        
-		if (pic_number > 0)
-		{
-			//add 512 bytes to open file
-			fwrite(buffer, 1, 512, outptr);
-		}
+		printf("SOFs found: %d, EOFs found: %d\n", sof, eof);
+		printf("found %d files\n", files);
+		delete[] buffer;
 	}
-	
-	//close any remaning files
-	fclose(outptr);
-	fclose(inptr);
-	free(buffer);
-	free(title);
 }
 
-
-/**
-* is_jpg(char*)
-*
-* Compares memory at pointer to standard JPEG signature
-* Pass in pointer to 512 bytes of memory
-* Returns 1 if it is the start of a jpeg
-*
-*/
-
-int is_jpg(unsigned char* test)
+string getOutpuDirectory(char *inputfile)
 {
-	// check for FFD8FFE at start of chunk
-	if (*test == 0xff &&
-		*(test + 1) == 0xd8)
-	{
-		return 1;
-	}
-	return 0;
+	string input(inputfile);
+	input = input.substr(0,input.find_last_of("."));
+	CreateDirectory(input.c_str(), NULL);
+	return input;
 }
