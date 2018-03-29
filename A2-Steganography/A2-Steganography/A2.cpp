@@ -64,39 +64,40 @@ int main(int argc, char** argv)
 bool encodeImage()
 {
 	string file = validateFile(".png");
-	fstream stream(file, ios::binary);
-	stream.seekg(0, stream.end);
-	int length = stream.tellg();
-	stream.seekg(0, stream.beg);
-	stream.seekg(0, length / 2);
-	string message;
-	int k = 0;
-	do
+	fstream stream(file, std::ios::binary | std::fstream::in | std::fstream::out);
+	if (stream)
 	{
-		cout << "Please enter the message to encode" << endl;
-		getline(cin, message);
-	} while (message.length() <= 0);
-	unsigned char * cMessage = (unsigned char *)message.c_str();
-
-	int what_bit_i_am_testing = 0;
-	unsigned char input;
-	for (int i = 0; i < message.length(); i++)
-	{
-		while (what_bit_i_am_testing < 8) 
+		stream.seekg(0, stream.end);
+		int length = stream.tellg();
+		stream.seekg(0, stream.beg);
+		stream.seekg(length/2, stream.beg);
+		string message;
+		int k = 0;
+		do
 		{
-			input = stream.get();
-			input = input & 0x00;
-			//stream.seekg(ios_base::cur, -1);
-			stream.put(input);
-			what_bit_i_am_testing++;
+			cout << "Please enter the message to encode" << endl;
+			getline(cin, message);
+		} while (message.length() <= 0);
+		unsigned char * cMessage = (unsigned char *)message.c_str();
 
-
-			message[i] = message[i] >> 1;
-			k++;
+		int what_bit_i_am_testing = 0;
+		unsigned char input;
+		for (int i = 0; i < message.length(); i++)
+		{
+			while (what_bit_i_am_testing < 8)
+			{
+				input = stream.get();
+				input = input & 0x00;
+				stream.seekp(-1, ios_base::cur);
+				stream.put(0x00);
+				what_bit_i_am_testing++;
+				message[i] = message[i] >> 1;
+				k++;
+			}
+			what_bit_i_am_testing = 0;
 		}
-		what_bit_i_am_testing = 0;
+		stream.close();
 	}
-	stream.close();
 	return true;
 }
 
@@ -104,29 +105,33 @@ bool decodeImage()
 {
 	string file = validateFile(".png");
 	fstream stream(file, ios::binary);
-	stream.seekg(0, stream.end);
-	int length = stream.tellg();
-	stream.seekg(0, stream.beg);
-	stream.seekg(0, length / 2);
-	string message;
-	int k = 0;
-	unsigned char * cMessage = (unsigned char *)message.c_str();
-
-	int what_bit_i_am_testing = 0;
-	unsigned char input[1] = "";
-	for (int i = 0; i < string("hello there").length(); i++)
+	if (stream)
 	{
-		while (what_bit_i_am_testing < 8) 
+
+		stream.seekg(0, stream.end);
+		int length = stream.tellg();
+		stream.seekg(0, stream.beg);
+		stream.seekg(0, length / 2);
+
+		string message;
+		int k = 0;
+		unsigned char * cMessage = (unsigned char *)message.c_str();
+
+		int what_bit_i_am_testing = 0;
+		unsigned char input[1] = "";
+		for (int i = 0; i < string("hello there").length(); i++)
 		{
-			input[0] = stream.get();
-			message[i] = message[i] | ((input[0] ^ 0x01) & 0x01);
-			what_bit_i_am_testing++;
+			while (what_bit_i_am_testing < 8)
+			{
+				input[0] = stream.get();
+				message[i] = message[i] | ((input[0] ^ 0x01) & 0x01);
+				what_bit_i_am_testing++;
 
-
-			message[i] = message[i] << 1;
-			k++;
+				message[i] = message[i] << 1;
+				k++;
+			}
+			what_bit_i_am_testing = 0;
 		}
-		what_bit_i_am_testing = 0;
 	}
 	return true;
 }
@@ -264,8 +269,12 @@ string validateFile(string fileType, bool checkExists)
 
 		if(checkExists)
 		{
-			ifstream temp(file.c_str());
-			valid = temp.good();
+			fstream stream(file, std::ios::binary | std::fstream::in | std::fstream::out);
+			if (stream)
+			{
+				valid = true;
+				stream.close();
+			}
 		}
 	}
 	return file;
