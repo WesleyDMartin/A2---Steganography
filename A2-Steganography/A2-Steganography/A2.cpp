@@ -79,14 +79,18 @@ bool encodeImage()
 	unsigned char * cMessage = (unsigned char *)message.c_str();
 
 	int what_bit_i_am_testing = 0;
+	unsigned char input[1] = "";
 	for (int i = 0; i < message.length(); i++)
 	{
 		while (what_bit_i_am_testing < 8) 
 		{
-			char temp = stream.get();
-			temp = temp ^ message[i];
-
+			input[0] = stream.get();
+			input[0] = input[0] ^ (message[i] & 0x01);
+			stream.seekg(ios_base::cur, -1);
+			stream.write((char *)input, 1);
 			what_bit_i_am_testing++;
+
+
 			message[i] = message[i] >> 1;
 			k++;
 		}
@@ -99,7 +103,31 @@ bool encodeImage()
 bool decodeImage()
 {
 	string file = validateFile(".jpg");
+	fstream stream(file, ios::binary);
+	stream.seekg(0, stream.end);
+	int length = stream.tellg();
+	stream.seekg(0, stream.beg);
+	stream.seekg(0, length / 2);
+	string message;
+	int k = 0;
+	unsigned char * cMessage = (unsigned char *)message.c_str();
 
+	int what_bit_i_am_testing = 0;
+	unsigned char input[1] = "";
+	for (int i = 0; i < string("hello there").length(); i++)
+	{
+		while (what_bit_i_am_testing < 8) 
+		{
+			input[0] = stream.get();
+			message[i] = message[i] | ((input[0] ^ 0x01) & 0x01);
+			what_bit_i_am_testing++;
+
+
+			message[i] = message[i] << 1;
+			k++;
+		}
+		what_bit_i_am_testing = 0;
+	}
 	return true;
 }
 
