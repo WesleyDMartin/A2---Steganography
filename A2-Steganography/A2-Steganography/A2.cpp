@@ -63,7 +63,7 @@ int main(int argc, char** argv)
 
 bool encodeImage()
 {
-	string file = validateFile(".jpg");
+	string file = validateFile(".png");
 	fstream stream(file, ios::binary);
 	stream.seekg(0, stream.end);
 	int length = stream.tellg();
@@ -79,15 +79,15 @@ bool encodeImage()
 	unsigned char * cMessage = (unsigned char *)message.c_str();
 
 	int what_bit_i_am_testing = 0;
-	unsigned char input[1] = "";
+	unsigned char input;
 	for (int i = 0; i < message.length(); i++)
 	{
 		while (what_bit_i_am_testing < 8) 
 		{
-			input[0] = stream.get();
-			input[0] = input[0] ^ (message[i] & 0x01);
-			stream.seekg(ios_base::cur, -1);
-			stream.write((char *)input, 1);
+			input = stream.get();
+			input = input & 0x00;
+			//stream.seekg(ios_base::cur, -1);
+			stream.put(input);
 			what_bit_i_am_testing++;
 
 
@@ -96,13 +96,13 @@ bool encodeImage()
 		}
 		what_bit_i_am_testing = 0;
 	}
-
+	stream.close();
 	return true;
 }
 
 bool decodeImage()
 {
-	string file = validateFile(".jpg");
+	string file = validateFile(".png");
 	fstream stream(file, ios::binary);
 	stream.seekg(0, stream.end);
 	int length = stream.tellg();
@@ -181,7 +181,7 @@ bool getImages()
 						if (depth == 0)
 						{
 							printf("Starting at byte %d, sector %.2f\n", i, i / 512.0);
-							fileName = directory + "/out" + to_string(files) + ".jpg";
+							fileName = directory + "/out" + to_string(files) + ".png";
 							cout << "Creating file " << fileName << endl;
 							out = ofstream(fileName, ios::binary);
 						}
@@ -211,7 +211,6 @@ bool getImages()
 					}
 					k++;
 				}
-
 
 			}
 			k = 0;
