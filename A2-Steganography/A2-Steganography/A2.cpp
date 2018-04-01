@@ -1,39 +1,13 @@
 /*
-*	FILE		  : .cpp
-*   PROJECT		  :	GAS - Assignment 1
+*	FILE		  : A2.cpp
+*   PROJECT		  :	ACS - Assignment 2
 *   PROGRAMMER	  : Wes Martin
-*	FIRST VERSION : 12/2/18
-*	DESCRIPTION	  : This file contains the
+*	FIRST VERSION : 4/1/18
+*	DESCRIPTION	  : This file contains the the methods needed to encode, decode
+*					and recover images from an old camera file.
 */
 
-// Pragmas
-#pragma warning(disable: 4996)
-#include <stdio.h>
-#include <windows.h>
-#include <fstream>
-#include <iterator>
-#include <algorithm>
-#include <iostream>
-#include <string>
-#include <windows.h>
-#include <objidl.h>
-#include <gdiplus.h>
-#include <vector>
-#pragma comment (lib,"Gdiplus.lib")
-
-using namespace Gdiplus;
-using namespace std;
-string getOutpuDirectory(string inputfile);
-std::string string_to_hex(const std::string& input);
-bool getImages();
-bool encodeImage();
-bool decodeImage();
-string validateFile(string fileType, bool checkExists = true);
-void splitYCrCb(char in, int *r, int *g, int *b);
-char createYCrCb(int r, int g, int b);
-int test(string file);
-int GetEncoderClsid(const WCHAR* format, CLSID* pClsid);
-void getThumbnail(int *files, string directory, ifstream &input, vector<string> &allFiles);
+#include "A2.h"
 
 int main(int argc, char** argv)
 {
@@ -48,7 +22,7 @@ int main(int argc, char** argv)
 		switch (std::cin.get())
 		{
 		case '1':
-			getImages();
+			get_images();
 			break;
 		case '2':
 			encodeImage();
@@ -65,110 +39,149 @@ int main(int argc, char** argv)
 		default:
 			cout << "error, invalid choice" << endl;
 			break;
-
 		}
 	}
-
 }
 
+/**
+ * \brief This method prompts the user for a file and, after verifying its existance, 
+ *		  it will prompt the user to enter a string. It will then ecode that string 
+ *		  into the image using a top scret encoding scheme.
+ * \return Status indicating success
+ */
 bool encodeImage()
 {
+	// Get the file from the user and validate it
 	string file = validateFile(".bmp");
+
+	// Prepare the stream
 	fstream stream(file, std::ios::binary | std::fstream::in | std::fstream::out);
 	if (stream)
 	{
-		stream.seekg(0, stream.end);
+		// Calculate the length of the file
+		stream.seekg(kDEFAULT, stream.end);
 		int length = stream.tellg();
-		stream.seekg(0, stream.beg);
-		stream.seekg(length / 2, stream.beg);
+		stream.seekg(kDEFAULT, stream.beg);
+
+		// Seek to the middle of the file
+		stream.seekg(length / kCUT_IN_HALF, stream.beg);
+
+		// Get the message from the user
 		string message;
-		int k = 0;
+		int k = kDEFAULT;
 		do
 		{
 			cout << "Please enter the message to encode" << endl;
 			getline(cin, message);
-		} while (message.length() <= 0);
-		message += "\r\r\r\r\r";
-		int r, g, b = 0;
-		int rindex, windex = 0;
-		int what_bit_i_am_testing = 0;
-		char  input[1];
-		stream.seekp(-1, ios_base::cur);
-		for (int i = 0; i < message.length(); i++)
+		}
+		while (message.length() <= kEMPTY);
+
+		// Append the footer
+		message += kFOOTER;
+
+		// Prepare variables
+		int r, g, b = kDEFAULT;
+		int what_bit_i_am_testing = kDEFAULT;
+		char input[kSECOND_INDEX];
+
+		// Account for rounding error
+		stream.seekp(kBACKWARDS * 1, ios_base::cur);
+
+		// Step through every byte in the secret message
+		for (int i = kDEFAULT; i < message.length(); i++)
 		{
-			while (what_bit_i_am_testing < 8)
+			// Step through every bit in each byte
+			while (what_bit_i_am_testing < kBITS_PER_BYTE)
 			{
-				rindex = stream.tellg();
-				windex = stream.tellp();
-				stream.seekp(1, ios_base::cur);
-				stream.read((char *)input, 1);
-				stream.seekp(-1, ios_base::cur);
-				rindex = stream.tellg();
-				windex = stream.tellp();
-				stream.seekp(-1, ios_base::cur);
-				rindex = stream.tellg();
-				windex = stream.tellp();
-				input[0] = (input[0] & 0xFE) | (message[i] & 0x01);
-				stream.write(input, 1);
-				rindex = stream.tellg();
-				windex = stream.tellp();
-				//stream.seekp(1, ios_base::cur);
+				// Get the next character to encode into
+				stream.seekp(kFORWARDS, ios_base::cur);
+				stream.read((char *)input, kBYTES_TO_READ*1);
+				stream.seekp(kBACKWARDS * 2, ios_base::cur);
+
+				// Encode the byte with the next bit of the byte of the message 
+				input[kFIRST_INDEX] = (input[kFIRST_INDEX] & !kFIRST_BIT) | (message[i] & kFIRST_BIT);
+				stream.write(input, kBYTES_TO_READ);
+
+				// Move to the next bit
 				what_bit_i_am_testing++;
 				message[i] = message[i] >> 1;
 				k++;
 			}
-			what_bit_i_am_testing = 0;
+			what_bit_i_am_testing = kEMPTY;
 		}
+
+		// Shut down everything
 		stream.close();
 	}
 	return true;
 }
 
+
+
+/**
+* \brief This method prompts the user for a file and, after verifying its existance,
+*		  it will Look through that file for the secret encoded message. It will either 
+*		  display the hidden message, or it will display an error message
+ * \return Success of the decoding
+ */
 bool decodeImage()
 {
+	// Get file from user and validate it
 	string file = validateFile(".bmp");
 	fstream stream(file, std::ios::binary | std::fstream::in);
 	if (stream)
 	{
-		stream.seekg(0, stream.end);
+		// Get length of file, seek to middle
+		stream.seekg(kDEFAULT, stream.end);
 		int length = stream.tellg();
-		stream.seekg(0, stream.beg);
-		stream.seekg(length / 2, stream.beg);
+		stream.seekg(kDEFAULT, stream.beg);
+		stream.seekg(length / kCUT_IN_HALF, stream.beg);
 
+		// Initialize default values
 		string message;
-		int k = 0;
-		int what_bit_i_am_testing = 0;
-		unsigned char input[1] = "";
-		unsigned char byte = 0;
-		stream.seekp(-1, ios_base::cur);
+		int k = kDEFAULT;
+		int what_bit_i_am_testing = kDEFAULT;
+		unsigned char input[kREAD_BUFFER] = kEMPTY_S;
+		unsigned char byte = kDEFAULT;
+
+		// Account for rounding error
+		stream.seekp(kBACKWARDS, ios_base::cur);
+
+		// Go until the end of the file is reached
 		while (stream.peek() != EOF)
 		{
-			while (what_bit_i_am_testing < 8)
-			{
 
+			// Step through 8 bytes at a time, pulling out lowest bit
+			while (what_bit_i_am_testing < kBITS_PER_BYTE)
+			{
+				// Shift right, to access next lowest bit
 				byte = byte >> 1;
 				int test = stream.tellp();
-				input[0] = stream.get();
+				input[kFIRST_INDEX] = stream.get();
 
-				byte = byte | ((input[0] & 0x01) * 128);
+				// Decode the lowest bit from the byte
+				byte = byte | ((input[kFIRST_INDEX] & kFIRST_BIT) * kBIT_EIGHT);
+
+				// Increment counters
 				what_bit_i_am_testing++;
 				k++;
 			}
-			//stream.seekp(2, ios_base::cur);
-			what_bit_i_am_testing = 0;
-			if (message.find("\r\r\r\r\r") != string::npos)
+			what_bit_i_am_testing = kDEFAULT;
+
+			// Check to see if the message footer has been found yet
+			if (message.find(kFOOTER) != string::npos)
 			{
-				message = message.erase(message.length() - 5);
+				message = message.erase(message.length() - kFOOTER_LENGTH);
 				break;
 			}
 			message += byte;
-			byte = 0;
-
+			byte = kDEFAULT;
 		}
 
+		// Display appropriate message
 		if (stream.peek() == EOF)
 		{
-			cout << "Sorry, no message found";
+			cout << "Sorry, no message found" << endl;
 		}
 		else
 		{
@@ -179,78 +192,136 @@ bool decodeImage()
 }
 
 
-bool getImages()
-{
-	string file = validateFile(".img");
-	vector<string> allFiles;
 
+
+/**
+ * \brief This method prompts the user for a .img file and, after validating it, steps through that file
+ *		  one sector at a time, looking for the start of a jpeg. When found, it steps through memory from 
+ *		  that point, reading in one sector after another. It scans through, looking for either the start
+ *		  of a thumbnail, or the end of the image. IF a thumbnail is found, it will call the get thumbnail 
+ *		  method. Once done, it returns. It then saves all the images to a folder based on the img name, 
+ *		  and then converts all valid jpegs to bmps.
+ * \return Success of image read
+ */
+bool get_images()
+{
+	bool getThumbnails = true;
+	// Check if thumbnails can be extracted and arrange it with the users
+	fstream stream("thumbnailTemplate.jpg", std::ios::binary | std::fstream::in | std::fstream::out);
+	if (stream)
+	{
+		stream.close();
+	}
+	else
+	{
+		cout << "You will not be able to get thumbnails without" << endl;
+		cout << "including the thumbnailTemplate.jpg file. Do you" << endl;
+		cout << "wish to continue without isolating thumbnails?" << endl << endl;
+		cout << "Please enter [y] to confirm or [n] for to exit" << endl;
+		bool cont = true;
+		while(cont)
+		{
+			switch (cin.get())
+			{
+			case 'y':
+			case 'Y':
+				getThumbnails = false;
+				cont = false;
+				break;
+
+			case'n':
+			case 'N':
+				return false;
+			}
+		}
+	}
+	// Get .img file and validate it
+	string file = validateFile(".img");
+
+	// Create necessary objects
+	vector<string> allFiles;
 	std::string fileName;
 	std::ifstream input(file, std::ios::binary);
 	std::ofstream out;
+
+	// Get directory name for images from file name
 	string directory = getOutpuDirectory(file);
 
-
-	int i = 0;
-	int k = 0;
-	if (input) {
+	// Initialize defaults
+	int i = kDEFAULT;
+	int k = kDEFAULT;
+	if (input)
+	{
 		// get length of file:
-		input.seekg(0, input.end);
+		input.seekg(kDEFAULT, input.end);
 		int length = input.tellg();
-		input.seekg(0, input.beg);
+		input.seekg(kDEFAULT, input.beg);
 
-		unsigned char * buffer = new unsigned char[length];
-		int sof = 0;
-		int eof = 0;
-		int files = 0;
-		int depth = 0;
+		// initalize more defaults
+		unsigned char* buffer = new unsigned char[length];
+		int sof = kDEFAULT;
+		int eof = kDEFAULT;
+		int files = kDEFAULT;
+		int depth = kDEFAULT;
 		bool copy = false;
 		cout << "Reading " << length << " characters... " << endl;
-		// read data as a block:
 
-		for (i = 0; i < length / 512; i++)
+		// read data as a block of 512
+		for (i = kDEFAULT; i < length / kSECTOR_SIZE; i++)
 		{
+			input.read((char *)buffer, kSECTOR_SIZE);
 
-			input.read((char *)buffer, 512);
-
-			if (buffer[0] == 0xFF && buffer[1] == 0xD8 || buffer[0] == 0xE5)
+			// Check for either a jpeg or erased sector
+			if (buffer[kFIRST_INDEX] == kCONTROL_BYTE && buffer[kSECOND_INDEX] == kSOI 
+				|| buffer[kFIRST_INDEX] == kERASED_RECORD)
 			{
 				copy = true;
+
+				// While copy is enabled
 				while (copy)
 				{
-					if (k == 512)
+					// If needed, read in the next chunk
+					if (k == kSECTOR_SIZE)
 					{
-						input.read((char *)buffer, 512);
-						k = 0;
+						input.read((char *)buffer, kSECTOR_SIZE);
+						k = kEMPTY;
 					}
-					if (buffer[k] == 0xFF && buffer[k + 1] == 0xD8)
+					// Check if at start of jpeg
+					if (buffer[k] == kCONTROL_BYTE && buffer[k + kSECOND_INDEX] ==kSOI)
 					{
-						if (depth == 0)
+						// IF at current level, create this images file and header
+						if (depth == kEMPTY)
 						{
-							//printf("Starting at byte %d, sector %.2f\n", i, i / 512.0);
 							fileName = directory + "/out" + to_string(files) + ".jpg";
 							allFiles.push_back(directory + "/out" + to_string(files));
 							cout << "Creating file " << fileName << endl;
 							out = ofstream(fileName, ios::binary);
 						}
-						else
+						// If "further down" in layers of jpeg, create a thumbnail, setup new image
+						else if (getThumbnails)
 						{
 							files++;
 							int test = input.tellg();
 							getThumbnail(&files, directory, input, allFiles);
 							test = input.tellg();
 						}
+						// Incremenet values
 						sof++;
 						depth++;
 					}
 
-					if (buffer[k] == 0xFF && buffer[k + 1] == 0xD9)
+					// Check if at end of jpeg
+					if (buffer[k] == kCONTROL_BYTE && buffer[k + kSECOND_INDEX] == kEOI)
 					{
+						// Decrease depth
 						eof++;
 						depth--;
-						if (depth == 0)
+
+						// Close and seal the file
+						if (depth == kEMPTY)
 						{
 							out << buffer[k];
-							out << buffer[k + 1];
+							out << buffer[k + kSECOND_INDEX];
 							copy = false;
 							cout << "closing file " << fileName << endl;
 							out.close();
@@ -263,47 +334,65 @@ bool getImages()
 					}
 					k++;
 				}
-
 			}
-			k = 0;
-
+			k = kEMPTY;
 		}
 		input.close();
 
-		printf("SOFs found: %d, EOFs found: %d\n", sof, eof);
-		printf("found %d files\n", files);
+		// Print out message
+		printf("Found %d files\n", files);
 		delete[] buffer;
-
-		for (int i = 0; i < allFiles.size(); i++)
+		
+		// Covert all the files to bmps, if possible
+		for (int i = kDEFAULT; i < allFiles.size(); i++)
 		{
-			test(allFiles[i]);
+			convertToBMP(allFiles[i]);
 		}
 	}
 	return true;
 }
 
+
+
+/**
+ * \brief Uses the name of the image file to create the directory for the recovered images
+ * \param input The string to pull the directory out of
+ * \return The directory name
+ */
 string getOutpuDirectory(string input)
 {
-	input = input.substr(0, input.find_last_of("."));
-	CreateDirectory(input.c_str(), NULL);
+	input = input.substr(kFIRST_INDEX, input.find_last_of("."));
+	CreateDirectory(input.c_str(), nullptr);
 	return input;
 }
 
 
+
+
+/**
+ * \brief Validate that a user given file exists and that the type is correct
+ * \param fileType The type to check for
+ * \param checkExists If set to true, check if file exists
+ * \return String with name of file
+ */
 string validateFile(string fileType, bool checkExists)
 {
 	bool valid = false;
 	string file;
 	while (!valid)
 	{
+		// Get file from user until correct type is provided
 		do
 		{
 			cout << "Please enter name of valid " << fileType << " file" << endl;
 			getline(cin, file);
-		} while (file.find(fileType) == string::npos);
+		}
+		while (file.find(fileType) == string::npos);
 
+		// If requestsed, check if file exists
 		if (checkExists)
 		{
+			// Open, check, and close stream
 			fstream stream(file, std::ios::binary | std::fstream::in | std::fstream::out);
 			if (stream)
 			{
@@ -316,140 +405,147 @@ string validateFile(string fileType, bool checkExists)
 }
 
 
-void splitYCrCb(char in, int  *r, int  *g, int  *b)
-{
-	int y = 0;
-	int cr = 0;
-	int cb = 0;
+//------------------------------------------------------------------------------------------------------------------------------------------------
 
-	cr += in & 1;
-	cr += in & 2;
-	cb += in & 4;
-	cb += in & 8;
-	y += in & 16;
-	y += in & 32;
-	y += in & 64;
-	y += in & 128;
-	double Y = (double)y;
-	double Cb = (double)cb;
-	double Cr = (double)cr;
-	*r = (int)(Y + 1.40200 * (Cr - 0x80));
-	*g = (int)(Y - 0.344136 * (Cb - 0x80) - 0.714136 * (Cr - 0x80));
-	*b = (int)(Y + 1.77200 * (Cb - 0x80));
-}
+// The following two methods, GetEncoderCLsid and convertToBMP, where both pulled from
+// https://www.neowin.net/forum/topic/803984-cc-jpg-to-bmp-conversion/ and I owe them a
+// for basically saving my life on this.
 
-char createYCrCb(int r, int g, int b)
-{
-	char ret = 0;
-	int y, cb, cr;
-	y = (int)(.299 * r + .587 * g + .114 * b);
-	cb = 128 - (int)(.168736 * r - .331264 * g + .5 * b);
-	cr = 128 + (int)(.5 * r - .418688 * g - .081312 * b);
-
-	ret += cr & 1;
-	ret += cr & 2;
-	ret += cb & 4;
-	ret += cb & 8;
-	ret += y & 16;
-	ret += y & 32;
-	ret += y & 64;
-	//ret += y & 128;
-	return ret;
-}
-
-
+/**
+ * \brief I am not sure what this does, but it works.
+ * \param format A magic format type
+ * \param pClsid A data type I have never heard of. No touchy
+ * \return 
+ */
 int GetEncoderClsid(const WCHAR* format, CLSID* pClsid)
 {
-	UINT  num = 0;		  // number of image encoders
-	UINT  size = 0;		 // size of the image encoder array in bytes
+	UINT num = kDEFAULT; // number of image encoders
+	UINT size = kDEFAULT; // size of the image encoder array in bytes
 
-	ImageCodecInfo* pImageCodecInfo = NULL;
+	ImageCodecInfo* pImageCodecInfo = nullptr;
 
 	GetImageEncodersSize(&num, &size);
-	if (size == 0)
-		return -1;  // Failure
+	if (size == kEMPTY)
+		return kFAILURE; // Failure
 
 	pImageCodecInfo = (ImageCodecInfo*)(malloc(size));
-	if (pImageCodecInfo == NULL)
-		return -1;  // Failure
+	if (pImageCodecInfo == nullptr)
+		return kFAILURE; // Failure
 
 	GetImageEncoders(num, size, pImageCodecInfo);
 
-	for (UINT j = 0; j < num; ++j)
+	for (UINT j = kDEFAULT; j < num; ++j)
 	{
-		if (wcscmp(pImageCodecInfo[j].MimeType, format) == 0)
+		if (wcscmp(pImageCodecInfo[j].MimeType, format) == kSUCCESS)
 		{
 			*pClsid = pImageCodecInfo[j].Clsid;
 			free(pImageCodecInfo);
-			return j;  // Success
+			return j; // Success
 		}
 	}
 	free(pImageCodecInfo);
-	return -1;
+	return kFAILURE;
 }
 
-//https://www.neowin.net/forum/topic/803984-cc-jpg-to-bmp-conversion/
-int test(string file)
+
+/**
+ * \brief Converts a jpeg, if valid, to bmp.
+ * \param file The jpeg to convert
+ * \return Indicates success of conversion
+ */
+int convertToBMP(string file)
 {
+	// Get name of jpeg file 
 	string jpg = file + ".jpg";
 	std::wstring jpgTemp = std::wstring(jpg.begin(), jpg.end());
 	wchar_t* jpgFile = (wchar_t *)jpgTemp.c_str();
 
+
+	// Get name of bmp file
 	string bmp = file + ".bmp";
 	std::wstring bmpTemp = std::wstring(bmp.begin(), bmp.end());
 	wchar_t* bmpFile = (wchar_t *)bmpTemp.c_str();
 
-
+	// Magic data types I have never heard of, it seems to be GDI based
 	GdiplusStartupInput startupInput;
 	ULONG_PTR token;
-	GdiplusStartup(&token, &startupInput, NULL);
-	Image * testImg = Gdiplus::Image::FromFile(jpgFile, false);
+	GdiplusStartup(&token, &startupInput, nullptr);
+	Image* testImg = Image::FromFile(jpgFile, false);
 	CLSID clsid;
-	int ret = -1;
+	int ret = kFAILURE;
 
-	if (-1 != GetEncoderClsid(L"image/bmp", &clsid)) {
+	if (kFAILURE != GetEncoderClsid(L"image/bmp", &clsid))
+	{
+		// Spit out the fresh faced bmp
 		ret = testImg->Save(bmpFile, &clsid);
 		cout << bmp << endl;
 	}
+
+	// Clean up 
 	delete testImg;
-	testImg = 0;
+	testImg = nullptr;
 	GdiplusShutdown(token);
 	return ret;
 }
+//------------------------------------------------------------------------------------------------------------------------------------------------
 
-void getThumbnail(int *files, string directory, ifstream &input, vector<string> &allFiles)
+
+/** IMPORTANT: FOR THIS TO WORK, THE FILE thumbnailTemplate.jpg MUST EXIST!!!!!!!!!!!!!!
+ *
+ * \brief This method is used to pull a thumbnail out of a jpeg oject, and creates a new 
+ *		  jpeg out of the thumbnail. 
+ * \param files The number of files created so far
+ * \param directory The directory to write the file to
+ * \param input The input stream to read from
+ * \param allFiles The list of all file names
+ */
+void getThumbnail(int* files, string directory, ifstream& input, vector<string>& allFiles)
 {
+	// Rewind two, so that the who file is read in
 	int currLocation = input.tellg();
-	input.seekg(-2, ios_base::cur);
+	input.seekg(kBACKWARDS * 2, ios_base::cur);
 	int thisFile = *files;
+
+	// Create objects
 	std::string fileName;
 	std::ofstream out;
-
-	int k = 0;
-
-	unsigned char * buffer = new unsigned char[2];
+	int k = kDEFAULT;
+	unsigned char* buffer = new unsigned char[kREAD_BUFFER];
 	fileName = directory + "/out" + to_string(thisFile) + ".jpg";
+
+	// Create output file
 	cout << "Creating file " << fileName << endl;
 	out = ofstream(fileName, ios::binary);
-	out << (char)0xFF;
-	out << (char)0xD8;
-	out << (char)0xFF;
 
-	input.seekg(2, ios_base::cur);
+	// Get thumbnail header from jpeg template and copy it in
+	unsigned char* header = thumbnailHeader();
+	out.write((char *)header, kHEADER_SIZE);
+
+	// Fast forward 2. 
+	input.seekg(kFORWARDS * 2, ios_base::cur);
+
+	// Go until end of file, if needed
 	while (input.peek() != EOF)
 	{
-		input.read((char *)buffer, 1);
-		if (buffer[0] == 0xFF || buffer[0] == 0xE5)
+		// Get the next byt
+		input.read((char *)buffer, kBYTES_TO_READ);
+
+		// Check if key value bytes were hit
+		if (buffer[kFIRST_INDEX] == kCONTROL_BYTE|| buffer[kFIRST_INDEX] == kERASED_RECORD)
 		{
-			out << buffer[0];
-			input.read((char *)buffer, 1);
-			out << buffer[0];
-			if(buffer[0] == 0xD8)
+			// Get next byte and write both to file
+			out << buffer[kFIRST_INDEX];
+			input.read((char *)buffer, kBYTES_TO_READ);
+			out << buffer[kFIRST_INDEX];
+
+			// If another thumbnail is detected, dive in again
+			if (buffer[kFIRST_INDEX] == kSOI)
 			{
 				getThumbnail(files, directory, input, allFiles);
 				break;
 			}
-			if (buffer[0] == 0xD9)
+			// IF end of file is reached, close up thumbnail shop and exit method
+			if (buffer[kFIRST_INDEX] == kEOI)
 			{
 				cout << "closing file " << fileName << endl;
 				out.close();
@@ -460,9 +556,35 @@ void getThumbnail(int *files, string directory, ifstream &input, vector<string> 
 		}
 		else
 		{
-			out << buffer[0];
+			// Write regular bytes to file
+			out << buffer[kFIRST_INDEX];
 		}
 	}
-	k = 0;
+	k = kEMPTY;
+
+	// Reset location to not mess with parent jpeg
 	input.seekg(currLocation);
+}
+
+
+
+/** IMPORTANT: FOR THIS TO WORK, THE FILE thumbnailTemplate.jpg MUST EXIST!!!!!!!!!!!!!!
+*
+* \brief This method creates the header text to be writting to the start of the thumbnail
+* \return The character string representing header
+*/
+unsigned char* thumbnailHeader()
+{
+	unsigned char* header = (unsigned char *)malloc(kHEADER_SIZE);
+	ifstream in("thumbnailTemplate.jpg", ios::binary);
+	if (in)
+	{
+		in.read((char *)header, kHEADER_SIZE);
+		in.close();
+	}
+	else
+	{
+		cout << "Error: Cannot process thumbnails" << endl;
+	}
+	return header;
 }

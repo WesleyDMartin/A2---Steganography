@@ -117,6 +117,12 @@
   <ItemGroup>
     <ClCompile Include="A2.cpp" />
   </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="A2.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="thumbnailTemplate.jpg" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
